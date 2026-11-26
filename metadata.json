@@ -1,0 +1,8 @@
+{
+  "name": "Meridian DCIM",
+  "description": "Data center infrastructure management console with real-time server health monitoring, rack elevation telemetry, and automated alert notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

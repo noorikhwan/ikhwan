@@ -1,0 +1,262 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated Orise DCIM operator profile and workspace preferences.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "role": { "type": "string", "enum": ["operator", "admin"] },
+        "primarySite": { "type": "string", "enum": ["kl1", "kl2", "kl3"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "displayName", "email", "role", "primarySite", "createdAt", "updatedAt"]
+    },
+    "AdminGrant": {
+      "title": "AdminGrant",
+      "description": "Administrator role assignment document keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "grantedBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["grantedBy", "createdAt"]
+    },
+    "NocTicket": {
+      "title": "NocTicket",
+      "description": "Cloud-synced operations ticket for cross-workstation NOC handoff.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "ticketId": { "type": "string", "minLength": 3, "maxLength": 40 },
+        "siteId": { "type": "string", "enum": ["kl1", "kl2", "kl3"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "priority": { "type": "string", "enum": ["P1 - Critical", "P2 - High", "P3 - Medium", "P4 - Low"] },
+        "status": { "type": "string", "enum": ["Open", "In Progress", "Pending Parts", "Resolved", "Closed"] },
+        "assetLabel": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "assigneeName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "ticketId", "siteId", "title", "priority", "status", "assetLabel", "assigneeName", "createdAt", "updatedAt"]
+    },
+    "ShiftHandover": {
+      "title": "ShiftHandover",
+      "description": "Signed end-of-shift handover brief synced across NOC workstations.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "siteId": { "type": "string", "enum": ["kl1", "kl2", "kl3"] },
+        "shiftLabel": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "operatorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "openCriticalCount": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "openTicketsCount": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "activeVisitorsCount": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "signedOff": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "siteId", "shiftLabel", "operatorName", "summary", "openCriticalCount", "openTicketsCount", "activeVisitorsCount", "signedOff", "createdAt", "updatedAt"]
+    },
+    "MaintenanceWindow": {
+      "title": "MaintenanceWindow",
+      "description": "Scheduled maintenance window for hall/rack alert silencing and horn suppression.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "siteId": { "type": "string", "enum": ["kl1", "kl2", "kl3"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "scopeType": { "type": "string", "enum": ["all", "hall", "rack", "subsystem"] },
+        "scopeValue": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "status": { "type": "string", "enum": ["active", "scheduled", "ended"] },
+        "startAtMs": { "type": "integer", "minimum": 0 },
+        "endAtMs": { "type": "integer", "minimum": 0 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "siteId", "title", "scopeType", "scopeValue", "reason", "createdBy", "status", "startAtMs", "endAtMs", "createdAt", "updatedAt"]
+    },
+    "AuditEvent": {
+      "title": "AuditEvent",
+      "description": "Immutable append-only hash-chained compliance audit entry.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "auditId": { "type": "string", "minLength": 3, "maxLength": 48 },
+        "siteCode": { "type": "string", "enum": ["KL1", "KL2", "KL3"] },
+        "actor": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "action": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "target": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "hash": { "type": "string", "minLength": 4, "maxLength": 128 },
+        "prevHash": { "type": "string", "minLength": 4, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "auditId", "siteCode", "actor", "category", "action", "target", "hash", "prevHash", "createdAt"]
+    },
+    "HallPowerPolicy": {
+      "title": "HallPowerPolicy",
+      "description": "Operator-configured per-hall power capacity alert threshold and hysteresis policy.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "siteId": { "type": "string", "enum": ["kl1", "kl2", "kl3"] },
+        "hallId": { "type": "string", "enum": ["hall-a", "hall-b", "hall-c", "hall-d"] },
+        "thresholdPct": { "type": "integer", "minimum": 75, "maximum": 115 },
+        "hysteresisKw": { "type": "number", "minimum": 0.05, "maximum": 1.5 },
+        "enabled": { "type": "boolean" },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "siteId", "hallId", "thresholdPct", "hysteresisKw", "enabled", "updatedBy", "createdAt", "updatedAt"]
+    },
+    "HallThermalPolicy": {
+      "title": "HallThermalPolicy",
+      "description": "Operator-configured per-hall rack thermal sensor warning/critical thresholds and hysteresis policy.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "siteId": { "type": "string", "enum": ["kl1", "kl2", "kl3"] },
+        "hallId": { "type": "string", "enum": ["hall-a", "hall-b", "hall-c", "hall-d"] },
+        "warningTempC": { "type": "number", "minimum": 50, "maximum": 80 },
+        "criticalTempC": { "type": "number", "minimum": 55, "maximum": 90 },
+        "hysteresisC": { "type": "number", "minimum": 0.5, "maximum": 5.0 },
+        "enabled": { "type": "boolean" },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "siteId", "hallId", "warningTempC", "criticalTempC", "hysteresisC", "enabled", "updatedBy", "createdAt", "updatedAt"]
+    },
+    "AlertStateRecord": {
+      "title": "AlertStateRecord",
+      "description": "Persisted alert acknowledgement, resolution, or ignore state synced across workstations.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "siteId": { "type": "string", "enum": ["kl1", "kl2", "kl3"] },
+        "alertId": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "state": { "type": "string", "enum": ["active", "acknowledged", "resolved", "ignored"] },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "siteId", "alertId", "state", "actorName", "createdAt", "updatedAt"]
+    },
+    "CustomAlertRule": {
+      "title": "CustomAlertRule",
+      "description": "Operator-created custom threshold alert rule persisted in Firestore.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "siteId": { "type": "string", "enum": ["kl1", "kl2", "kl3"] },
+        "ruleId": { "type": "string", "minLength": 3, "maxLength": 64 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "metric": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "operator": { "type": "string", "enum": [">", ">=", "<"] },
+        "threshold": { "type": "number" },
+        "severity": { "type": "string", "enum": ["warning", "critical"] },
+        "scopeHall": { "type": "string", "enum": ["all", "hall-a", "hall-b", "hall-c", "hall-d"] },
+        "enabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "siteId", "ruleId", "name", "metric", "operator", "threshold", "severity", "scopeHall", "enabled", "createdAt", "updatedAt"]
+    },
+    "SiteVisitorRecord": {
+      "title": "SiteVisitorRecord",
+      "description": "Cloud-synced physical visitor access record (non-PII operational badge & check-in state).",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "visitorId": { "type": "string", "minLength": 3, "maxLength": 64 },
+        "siteId": { "type": "string", "enum": ["kl1", "kl2", "kl3"] },
+        "fullName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "company": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "status": { "type": "string", "enum": ["Pre-Registered", "Checked In", "Checked Out", "Revoked"] },
+        "escortName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "badgeNumber": { "type": "string", "minLength": 0, "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "visitorId", "siteId", "fullName", "company", "status", "escortName", "badgeNumber", "createdAt", "updatedAt"]
+    },
+    "IncidentRunbookRecord": {
+      "title": "IncidentRunbookRecord",
+      "description": "Closed-loop Incident War Room runbook execution log synced across operators.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "runbookId": { "type": "string", "minLength": 3, "maxLength": 80 },
+        "alertId": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "siteId": { "type": "string", "enum": ["kl1", "kl2", "kl3"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 220 },
+        "assignedEngineerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "completedSteps": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "totalSteps": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "appendedToHandover": { "type": "boolean" },
+        "notes": { "type": "string", "minLength": 0, "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "runbookId", "alertId", "siteId", "title", "assignedEngineerName", "completedSteps", "totalSteps", "appendedToHandover", "notes", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private operator profile document keyed by Firebase Auth UID."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminGrant" },
+      "description": "Admin role grant records readable by authenticated admins and writable only by admins."
+    },
+    "/noc_tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/NocTicket" },
+      "description": "Cloud-persisted NOC operational tickets owned by creator UID."
+    },
+    "/shift_handovers/{handoverId}": {
+      "schema": { "$ref": "#/entities/ShiftHandover" },
+      "description": "Signed shift handover briefs persisted for multi-workstation sync."
+    },
+    "/maintenance_windows/{windowId}": {
+      "schema": { "$ref": "#/entities/MaintenanceWindow" },
+      "description": "Planned maintenance windows silencing audible alarms and dispatches."
+    },
+    "/audit_events/{eventId}": {
+      "schema": { "$ref": "#/entities/AuditEvent" },
+      "description": "Immutable append-only hash-chained compliance audit trail."
+    },
+    "/hall_power_policies/{policyId}": {
+      "schema": { "$ref": "#/entities/HallPowerPolicy" },
+      "description": "Per-hall power capacity threshold policies synced per operator UID across workstations."
+    },
+    "/hall_thermal_policies/{policyId}": {
+      "schema": { "$ref": "#/entities/HallThermalPolicy" },
+      "description": "Per-hall rack thermal sensor threshold policies synced per operator UID across workstations."
+    },
+    "/alert_states/{stateId}": {
+      "schema": { "$ref": "#/entities/AlertStateRecord" },
+      "description": "Persisted alert acknowledgement, ignore, and resolution states synced across workstations."
+    },
+    "/custom_alert_rules/{ruleId}": {
+      "schema": { "$ref": "#/entities/CustomAlertRule" },
+      "description": "Operator-authored custom telemetry threshold rules synced across sessions."
+    },
+    "/site_visitors/{visitorDocId}": {
+      "schema": { "$ref": "#/entities/SiteVisitorRecord" },
+      "description": "Site visitor registrations and check-in/out badge states persisted for shift continuity."
+    },
+    "/incident_runbooks/{runbookId}": {
+      "schema": { "$ref": "#/entities/IncidentRunbookRecord" },
+      "description": "Closed-loop Incident War Room runbook execution status and operator sign-offs."
+    }
+  }
+}

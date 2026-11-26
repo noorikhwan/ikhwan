@@ -1,0 +1,600 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Hardened Global Primitives
+    // =========================================================================
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrapAdmin() {
+      return isVerifiedUser()
+        && request.auth.token.email == 'noorikhwan@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrapAdmin()
+        || (isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isSignedIn() && existing().ownerUid == request.auth.uid;
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidSiteId(val) {
+      return val in ['kl1', 'kl2', 'kl3'];
+    }
+
+    function isValidSiteCode(val) {
+      return val in ['KL1', 'KL2', 'KL3'];
+    }
+
+    function isValidHallId(val) {
+      return val in ['hall-a', 'hall-b', 'hall-c', 'hall-d'];
+    }
+
+    // =========================================================================
+    // Entity Validation Blueprints (Anti-Update-Gap)
+    // =========================================================================
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+          'ownerUid', 'displayName', 'email', 'role', 'primarySite', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'displayName', 'email', 'role', 'primarySite', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == userId
+        && isValidString(data.displayName, 1, 100)
+        && isValidString(data.email, 3, 200)
+        && data.role in ['operator', 'admin']
+        && isValidSiteId(data.primarySite)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNocTicket(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'ticketId', 'siteId', 'title', 'priority',
+          'status', 'assetLabel', 'assigneeName', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'ticketId', 'siteId', 'title', 'priority',
+          'status', 'assetLabel', 'assigneeName', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidString(data.ticketId, 3, 40)
+        && isValidSiteId(data.siteId)
+        && isValidString(data.title, 1, 200)
+        && data.priority in ['P1 - Critical', 'P2 - High', 'P3 - Medium', 'P4 - Low']
+        && data.status in ['Open', 'In Progress', 'Pending Parts', 'Resolved', 'Closed']
+        && isValidString(data.assetLabel, 1, 120)
+        && isValidString(data.assigneeName, 1, 100)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidShiftHandover(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'siteId', 'shiftLabel', 'operatorName', 'summary',
+          'openCriticalCount', 'openTicketsCount', 'activeVisitorsCount',
+          'signedOff', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'siteId', 'shiftLabel', 'operatorName', 'summary',
+          'openCriticalCount', 'openTicketsCount', 'activeVisitorsCount',
+          'signedOff', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidSiteId(data.siteId)
+        && isValidString(data.shiftLabel, 1, 80)
+        && isValidString(data.operatorName, 1, 100)
+        && isValidString(data.summary, 1, 4000)
+        && data.openCriticalCount is int && data.openCriticalCount >= 0 && data.openCriticalCount <= 10000
+        && data.openTicketsCount is int && data.openTicketsCount >= 0 && data.openTicketsCount <= 10000
+        && data.activeVisitorsCount is int && data.activeVisitorsCount >= 0 && data.activeVisitorsCount <= 10000
+        && data.signedOff is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMaintenanceWindow(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'siteId', 'title', 'scopeType', 'scopeValue', 'reason',
+          'createdBy', 'status', 'startAtMs', 'endAtMs', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'siteId', 'title', 'scopeType', 'scopeValue', 'reason',
+          'createdBy', 'status', 'startAtMs', 'endAtMs', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidSiteId(data.siteId)
+        && isValidString(data.title, 1, 160)
+        && data.scopeType in ['all', 'hall', 'rack', 'subsystem']
+        && isValidString(data.scopeValue, 1, 80)
+        && isValidString(data.reason, 1, 500)
+        && isValidString(data.createdBy, 1, 100)
+        && data.status in ['active', 'scheduled', 'ended']
+        && data.startAtMs is int && data.startAtMs >= 0
+        && data.endAtMs is int && data.endAtMs > data.startAtMs
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuditEvent(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'auditId', 'siteCode', 'actor', 'category',
+          'action', 'target', 'hash', 'prevHash', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'auditId', 'siteCode', 'actor', 'category',
+          'action', 'target', 'hash', 'prevHash', 'createdAt'
+        ])
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidString(data.auditId, 3, 48)
+        && isValidSiteCode(data.siteCode)
+        && isValidString(data.actor, 1, 100)
+        && isValidString(data.category, 1, 40)
+        && isValidString(data.action, 1, 400)
+        && isValidString(data.target, 1, 120)
+        && isValidString(data.hash, 4, 128)
+        && isValidString(data.prevHash, 4, 128)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidHallPowerPolicy(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'siteId', 'hallId', 'thresholdPct', 'hysteresisKw',
+          'enabled', 'updatedBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'siteId', 'hallId', 'thresholdPct', 'hysteresisKw',
+          'enabled', 'updatedBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidSiteId(data.siteId)
+        && isValidHallId(data.hallId)
+        && data.thresholdPct is int && data.thresholdPct >= 75 && data.thresholdPct <= 115
+        && data.hysteresisKw is number && data.hysteresisKw >= 0.05 && data.hysteresisKw <= 1.5
+        && data.enabled is bool
+        && isValidString(data.updatedBy, 1, 100)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidHallThermalPolicy(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'siteId', 'hallId', 'warningTempC', 'criticalTempC',
+          'hysteresisC', 'enabled', 'updatedBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'siteId', 'hallId', 'warningTempC', 'criticalTempC',
+          'hysteresisC', 'enabled', 'updatedBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidSiteId(data.siteId)
+        && isValidHallId(data.hallId)
+        && data.warningTempC is number && data.warningTempC >= 50 && data.warningTempC <= 80
+        && data.criticalTempC is number && data.criticalTempC >= 55 && data.criticalTempC <= 90
+        && data.criticalTempC > data.warningTempC
+        && data.hysteresisC is number && data.hysteresisC >= 0.5 && data.hysteresisC <= 5.0
+        && data.enabled is bool
+        && isValidString(data.updatedBy, 1, 100)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAlertState(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'siteId', 'alertId', 'state', 'actorName', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'siteId', 'alertId', 'state', 'actorName', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidSiteId(data.siteId)
+        && isValidString(data.alertId, 2, 80)
+        && data.state in ['active', 'acknowledged', 'resolved', 'ignored']
+        && isValidString(data.actorName, 1, 100)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCustomAlertRule(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'siteId', 'ruleId', 'name', 'metric', 'operator',
+          'threshold', 'severity', 'scopeHall', 'enabled', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'siteId', 'ruleId', 'name', 'metric', 'operator',
+          'threshold', 'severity', 'scopeHall', 'enabled', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidSiteId(data.siteId)
+        && isValidString(data.ruleId, 3, 64)
+        && isValidString(data.name, 1, 140)
+        && isValidString(data.metric, 1, 40)
+        && data.operator in ['>', '>=', '<']
+        && data.threshold is number && data.threshold >= 0 && data.threshold <= 100000
+        && data.severity in ['warning', 'critical']
+        && data.scopeHall in ['all', 'hall-a', 'hall-b', 'hall-c', 'hall-d']
+        && data.enabled is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSiteVisitor(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'visitorId', 'siteId', 'fullName', 'company',
+          'status', 'escortName', 'badgeNumber', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'visitorId', 'siteId', 'fullName', 'company',
+          'status', 'escortName', 'badgeNumber', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidString(data.visitorId, 3, 64)
+        && isValidSiteId(data.siteId)
+        && isValidString(data.fullName, 1, 120)
+        && isValidString(data.company, 1, 120)
+        && data.status in ['Pre-Registered', 'Checked In', 'Checked Out', 'Revoked']
+        && isValidString(data.escortName, 1, 100)
+        && isValidString(data.badgeNumber, 0, 40)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidIncidentRunbook(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'runbookId', 'alertId', 'siteId', 'title',
+          'assignedEngineerName', 'completedSteps', 'totalSteps',
+          'appendedToHandover', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'runbookId', 'alertId', 'siteId', 'title',
+          'assignedEngineerName', 'completedSteps', 'totalSteps',
+          'appendedToHandover', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidString(data.runbookId, 3, 80)
+        && isValidString(data.alertId, 2, 80)
+        && isValidSiteId(data.siteId)
+        && isValidString(data.title, 1, 220)
+        && isValidString(data.assignedEngineerName, 1, 100)
+        && data.completedSteps is int && data.completedSteps >= 0 && data.completedSteps <= 20
+        && data.totalSteps is int && data.totalSteps >= 1 && data.totalSteps <= 20
+        && data.completedSteps <= data.totalSteps
+        && data.appendedToHandover is bool
+        && isValidString(data.notes, 0, 1000)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // =========================================================================
+    // Collection Rules
+    // =========================================================================
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (incoming().role == 'operator' || isBootstrapAdmin());
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isOwner(userId)
+            && incoming().role == existing().role
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'primarySite', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrapAdmin();
+      allow create, update: if isValidId(userId)
+        && isAdmin()
+        && incoming().keys().hasAll(['grantedBy', 'createdAt'])
+        && incoming().keys().hasOnly(['grantedBy', 'createdAt'])
+        && isValidString(incoming().grantedBy, 1, 128)
+        && incoming().createdAt == request.time;
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    match /noc_tickets/{ticketId} {
+      allow get: if isValidId(ticketId) && (isDocOwner() || isAdmin());
+      allow list: if isDocOwner() || isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(ticketId)
+        && isValidNocTicket(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(ticketId)
+        && isValidNocTicket(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().ticketId == existing().ticketId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isDocOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'assigneeName', 'priority', 'title', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(ticketId) && (isDocOwner() || isAdmin());
+    }
+
+    match /shift_handovers/{handoverId} {
+      allow get: if isValidId(handoverId) && (isDocOwner() || isAdmin());
+      allow list: if isDocOwner() || isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(handoverId)
+        && isValidShiftHandover(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(handoverId)
+        && isValidShiftHandover(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isDocOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['summary', 'signedOff', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(handoverId) && (isDocOwner() || isAdmin());
+    }
+
+    match /maintenance_windows/{windowId} {
+      allow get: if isValidId(windowId) && (isDocOwner() || isAdmin());
+      allow list: if isDocOwner() || isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(windowId)
+        && isValidMaintenanceWindow(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(windowId)
+        && isValidMaintenanceWindow(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isDocOwner()
+            && existing().status != 'ended'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'endAtMs', 'reason', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(windowId) && (isDocOwner() || isAdmin());
+    }
+
+    match /audit_events/{eventId} {
+      allow get: if isValidId(eventId) && (isDocOwner() || isAdmin());
+      allow list: if isDocOwner() || isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(eventId)
+        && isValidAuditEvent(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /hall_power_policies/{policyId} {
+      allow get: if isValidId(policyId) && (isDocOwner() || isAdmin());
+      allow list: if isDocOwner() || isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(policyId)
+        && isValidHallPowerPolicy(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(policyId)
+        && isValidHallPowerPolicy(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().siteId == existing().siteId
+        && incoming().hallId == existing().hallId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isDocOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['thresholdPct', 'hysteresisKw', 'enabled', 'updatedBy', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(policyId) && (isDocOwner() || isAdmin());
+    }
+
+    match /hall_thermal_policies/{policyId} {
+      allow get: if isValidId(policyId) && (isDocOwner() || isAdmin());
+      allow list: if isDocOwner() || isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(policyId)
+        && isValidHallThermalPolicy(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(policyId)
+        && isValidHallThermalPolicy(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().siteId == existing().siteId
+        && incoming().hallId == existing().hallId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isDocOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['warningTempC', 'criticalTempC', 'hysteresisC', 'enabled', 'updatedBy', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(policyId) && (isDocOwner() || isAdmin());
+    }
+
+    match /alert_states/{stateId} {
+      allow get: if isValidId(stateId) && (isDocOwner() || isAdmin());
+      allow list: if isDocOwner() || isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(stateId)
+        && isValidAlertState(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(stateId)
+        && isValidAlertState(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().siteId == existing().siteId
+        && incoming().alertId == existing().alertId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isDocOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['state', 'actorName', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(stateId) && (isDocOwner() || isAdmin());
+    }
+
+    match /custom_alert_rules/{ruleId} {
+      allow get: if isValidId(ruleId) && (isDocOwner() || isAdmin());
+      allow list: if isDocOwner() || isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(ruleId)
+        && isValidCustomAlertRule(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(ruleId)
+        && isValidCustomAlertRule(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().siteId == existing().siteId
+        && incoming().ruleId == existing().ruleId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isDocOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['enabled', 'threshold', 'severity', 'name', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(ruleId) && (isDocOwner() || isAdmin());
+    }
+
+    match /site_visitors/{visitorDocId} {
+      allow get: if isValidId(visitorDocId) && (isDocOwner() || isAdmin());
+      allow list: if isDocOwner() || isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(visitorDocId)
+        && isValidSiteVisitor(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(visitorDocId)
+        && isValidSiteVisitor(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().visitorId == existing().visitorId
+        && incoming().siteId == existing().siteId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isDocOwner()
+            && existing().status != 'Revoked'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'badgeNumber', 'escortName', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(visitorDocId) && (isDocOwner() || isAdmin());
+    }
+
+    match /incident_runbooks/{runbookId} {
+      allow get: if isValidId(runbookId) && (isDocOwner() || isAdmin());
+      allow list: if isDocOwner() || isBootstrapAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(runbookId)
+        && isValidIncidentRunbook(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(runbookId)
+        && isValidIncidentRunbook(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().runbookId == existing().runbookId
+        && incoming().alertId == existing().alertId
+        && incoming().siteId == existing().siteId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isDocOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['assignedEngineerName', 'completedSteps', 'appendedToHandover', 'notes', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(runbookId) && (isDocOwner() || isAdmin());
+    }
+  }
+}
